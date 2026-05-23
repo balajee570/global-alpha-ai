@@ -116,8 +116,8 @@ st.divider()
 col1, col2 = st.columns([3, 1])
 
 with col1:
-    st.markdown("#### 📋 Input: CSV Screener or Full NASDAQ")
-    input_mode = st.radio("Choose input method:", ["Upload CSV", "Use S&P 500 Default"], horizontal=True)
+    st.markdown("#### 📋 Input: CSV Screener or NASDAQ Default")
+    input_mode = st.radio("Choose input method:", ["Upload CSV", "Use NASDAQ Default"], horizontal=True)
 
 with col2:
     st.markdown("#### 🎯")
@@ -139,7 +139,7 @@ if input_mode == "Upload CSV":
             symbols = None
 else:
     symbols = get_sp500_list()
-    st.info(f"📊 Using S&P 500 default universe ({len(symbols)} stocks)")
+    st.info(f"📊 Using NASDAQ default universe ({len(symbols)} stocks - tech-heavy, growth-focused)")
 
 # ==================== MANUAL SEARCH ====================
 with st.expander("🔍 Add Stocks Manually (Search Tab)"):

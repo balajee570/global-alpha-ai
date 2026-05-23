@@ -138,15 +138,30 @@ def parse_nasdaq_screener_csv(uploaded_file) -> list:
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_sp500_list() -> list:
     """
-    Return a curated S&P 500 list for faster testing.
-    Can be expanded to full NASDAQ (3,500) for production.
+    Return curated NASDAQ list (tech-heavy, growth-focused).
+    Includes mega-caps + mid-caps + high-growth names.
     """
     return [
+        # Mega-cap Tech
         'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'AVGO', 'QCOM',
-        'CSCO', 'ADBE', 'CRM', 'ACN', 'NFLX', 'AMD', 'INTC', 'VZ', 'JNJ', 'KO',
-        'PEP', 'MCD', 'NKE', 'PYPL', 'SQ', 'INTU', 'AMAT', 'LRCX', 'MRNA', 'BKNG',
-        'DXCM', 'REGN', 'VRSK', 'ASML', 'ABNB', 'ENPH', 'SNPS', 'CDNS', 'OKTA', 'PANW',
-        'CRWD', 'ZS', 'SPLK', 'DDOG', 'SNOW', 'NET', 'TTD', 'COIN', 'HOOD', 'SOFI',
+        # Large-cap Tech
+        'CSCO', 'ADBE', 'CRM', 'ACN', 'NFLX', 'AMD', 'INTC', 'INTU', 'AMAT', 'LRCX',
+        # Healthcare/Biotech
+        'MRNA', 'BKNG', 'DXCM', 'REGN', 'VRSK', 'ABBV', 'VRTX', 'ILMN',
+        # Cloud/SaaS/Growth
+        'OKTA', 'PANW', 'CRWD', 'ZS', 'SPLK', 'DDOG', 'SNOW', 'NET', 'TTD', 'COIN',
+        # Semi/Hardware
+        'ASML', 'ASML', 'MRVL', 'MU', 'NXPI', 'SLAB',
+        # Fintech/Travel
+        'ABNB', 'PYPL', 'SQ', 'SOFI', 'HOOD', 'UPST',
+        # Renewable/Industrial
+        'ENPH', 'RUN', 'PLUG', 'SEDG',
+        # AI/Semiconductors
+        'SNPS', 'CDNS', 'ARM', 'SMCI', 'AIPC',
+        # FinServ
+        'SCHW', 'HOOD', 'COIN',
+        # Other Growth
+        'DASH', 'FVRR', 'ROKU', 'CPNG', 'XM', 'DKNG', 'AFRM',
     ]
 
 
