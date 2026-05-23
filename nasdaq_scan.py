@@ -51,8 +51,11 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
                 pass
 
         df = data.get(ticker)
-        if df is None or df.empty or len(df) < MIN_BARS:
-            failed.append((ticker, "Insufficient data"))
+        if df is None or df.empty:
+            failed.append((ticker, "No data"))
+            continue
+        if len(df) < MIN_BARS:
+            failed.append((ticker, f"Only {len(df)} bars (need {MIN_BARS})"))
             continue
 
         try:
