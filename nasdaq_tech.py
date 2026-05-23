@@ -18,7 +18,7 @@ BREAKOUT_LOOKBACK = 20
 VOL_LOOKBACK = 20
 VOL_SURGE_THRESH = 1.8
 BREAKOUT_TOLERANCE = 0.99
-MIN_BARS = 60
+MIN_BARS = 30  # Minimum trading days of data required (2 weeks)
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 72  # Stocks above this excluded from Top 3
 

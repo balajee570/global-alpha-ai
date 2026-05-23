@@ -141,18 +141,51 @@ else:
     symbols = get_sp500_list()
     st.info(f"📊 Using NASDAQ default universe ({len(symbols)} stocks - tech-heavy, growth-focused)")
 
-# ==================== MANUAL SEARCH ====================
+# ==================== DEBUG / MANUAL SEARCH ====================
+with st.expander("🔍 Quick Diagnostics"):
+    if st.button("Test Data Download (5 mega-caps)"):
+        with st.spinner("Testing yfinance downloads..."):
+            try:
+                test_symbols = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN']
+                from nasdaq_data import parallel_fetch_nasdaq
+                test_data = parallel_fetch_nasdaq(test_symbols)
+
+                success_count = sum(1 for v in test_data.values() if v is not None and not v.empty)
+                st.success(f"✅ Downloaded {success_count}/{len(test_symbols)} stocks successfully")
+
+                for sym, df in test_data.items():
+                    if df is not None and not df.empty:
+                        st.caption(f"{sym}: {len(df)} candles, latest price ${df['Close'].iloc[-1]:.2f}")
+                    else:
+                        st.caption(f"{sym}: ⚠️ No data")
+            except Exception as e:
+                st.error(f"Download test failed: {str(e)}")
+
 with st.expander("🔍 Add Stocks Manually (Search Tab)"):
     search_ticker = st.text_input("Search ticker (e.g., MSFT, NVDA)", key="search_ticker").upper().strip()
 
 # ==================== RUN SCAN ====================
 if symbols and st.button("🚀 Run Full Scan", type="primary", use_container_width=True):
-    with st.spinner("🔄 Running full NASDAQ analysis..."):
+    with st.spinner("🔄 Running full NASDAQ analysis (this may take 3-5 minutes)..."):
         try:
             st.session_state.scan_result = build_scan_report(symbols, progress_cb=None)
-            st.success("✅ Scan complete!")
+
+            # Check if results are empty
+            momentum_df = st.session_state.scan_result.get("momentum_df", pd.DataFrame())
+            shortlist_df = st.session_state.scan_result.get("shortlist_df", pd.DataFrame())
+
+            if momentum_df.empty:
+                st.warning(f"⚠️ No scan results. Checked {len(symbols)} stocks but none passed filters.")
+                st.info("Try uploading a CSV with different stocks, or check your internet connection.")
+            elif shortlist_df.empty:
+                st.warning(f"📊 Scan found {len(momentum_df)} stocks with momentum, but none qualified as 'Top Picks' (Score < 45).")
+                st.info("Check the Full Scan tab to see all candidates.")
+            else:
+                st.success(f"✅ Scan complete! Found {len(momentum_df)} candidates, {len(shortlist_df)} top picks.")
+
         except Exception as e:
             st.error(f"Scan error: {str(e)}")
+            st.info("This may indicate a network issue or data availability problem. Try again in a moment.")
 
 # ==================== RESULTS SECTION ====================
 if st.session_state.scan_result:

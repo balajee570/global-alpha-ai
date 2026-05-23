@@ -125,16 +125,11 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
             }
             stage_id, stage_lbl = classify_stage(metrics)
 
-            # Filter: keep all stages that have meaningful signal
-            # Stage 1-4 all count; also keep price > MA50 (positive trend)
-            # This is more inclusive to avoid filtering out too many stocks
-            stage_pass = stage_id in (1, 2, 3, 4)  # All stages are valid
-            trend_pass = np.isfinite(ma50) and price > ma50  # Above 50-day MA
-            momentum_pass = is_breakout or is_vol_surge  # Breakout or volume surge
-
-            # Keep if: has stage signal OR above MA50 with momentum
-            if not (stage_pass or (trend_pass and momentum_pass)):
-                continue
+            # Filter: keep all stocks with valid technical data
+            # Removed strict stage/momentum filters - just need valid price/volume data
+            # Scoring will separate good opportunities from weak ones
+            if not (np.isfinite(ma50) and np.isfinite(ma200) and np.isfinite(rsi)):
+                continue  # Skip only if core technicals are invalid
 
             # Pattern detection
             pat = detect_base_pattern(close, df["Volume"]) or {}
