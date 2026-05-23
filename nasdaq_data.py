@@ -141,7 +141,7 @@ def get_sp500_list() -> list:
     Return curated NASDAQ list (tech-heavy, growth-focused).
     Includes mega-caps + mid-caps + high-growth names.
     """
-    return [
+    symbols = [
         # Mega-cap Tech
         'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'AVGO', 'QCOM',
         # Large-cap Tech
@@ -151,18 +151,17 @@ def get_sp500_list() -> list:
         # Cloud/SaaS/Growth
         'OKTA', 'PANW', 'CRWD', 'ZS', 'SPLK', 'DDOG', 'SNOW', 'NET', 'TTD', 'COIN',
         # Semi/Hardware
-        'ASML', 'ASML', 'MRVL', 'MU', 'NXPI', 'SLAB',
+        'ASML', 'MRVL', 'MU', 'NXPI', 'SLAB',
         # Fintech/Travel
         'ABNB', 'PYPL', 'SQ', 'SOFI', 'HOOD', 'UPST',
         # Renewable/Industrial
         'ENPH', 'RUN', 'PLUG', 'SEDG',
         # AI/Semiconductors
         'SNPS', 'CDNS', 'ARM', 'SMCI', 'AIPC',
-        # FinServ
-        'SCHW', 'HOOD', 'COIN',
-        # Other Growth
-        'DASH', 'FVRR', 'ROKU', 'CPNG', 'XM', 'DKNG', 'AFRM',
+        # Other Finance/Growth
+        'SCHW', 'DASH', 'FVRR', 'ROKU', 'CPNG', 'XM', 'DKNG', 'AFRM',
     ]
+    return list(dict.fromkeys(symbols))  # Remove any remaining duplicates
 
 
 def parallel_fetch_nasdaq(symbols: list, batch_size: int = 50, progress_cb=None) -> dict:
@@ -176,14 +175,15 @@ def parallel_fetch_nasdaq(symbols: list, batch_size: int = 50, progress_cb=None)
 
     def fetch_one(symbol):
         try:
-            # Try 1 year first, fallback to 2 years if sparse
+            # Request 2 years to maximize data availability
             data = _yf_download(
                 symbol, period='2y', interval='1d',
                 group_by='ticker', threads=False, progress=False,
                 auto_adjust=True, timeout=30,
             )
             if data is not None and not data.empty:
-                return symbol, data.tail(252)  # Return last 252 days (1 year)
+                logger.debug(f"{symbol}: Downloaded {len(data)} bars")
+                return symbol, data
         except Exception as e:
             logger.debug(f"Fetch failed for {symbol}: {e}")
         return symbol, None

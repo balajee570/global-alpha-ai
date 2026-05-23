@@ -176,6 +176,9 @@ if symbols and st.button("🚀 Run Full Scan", type="primary", use_container_wid
 
             if momentum_df.empty:
                 st.error(f"❌ No scan results. Checked {len(symbols)} stocks but none returned valid data.")
+
+                st.info("**Quick Debug:** Run the 'Test Data Download' diagnostic below to see if yfinance is working.")
+
                 with st.expander("🔧 Troubleshooting"):
                     st.write("""
 **Possible causes:**
@@ -185,10 +188,9 @@ if symbols and st.button("🚀 Run Full Scan", type="primary", use_container_wid
 4. **Sparse data** - Stocks may not have enough price history
 
 **Solutions:**
-- Click "Test Data Download" in Quick Diagnostics to check if data works
-- Use CSV upload with your own stock list instead of defaults
-- Try uploading a smaller CSV (10-20 stocks) to test
-- If test download works but scan fails, the issue is data availability
+- Click "Test Data Download" in Quick Diagnostics below
+- Use CSV upload with your own stock list
+- Try uploading a smaller CSV (5 stocks) to test
                     """)
             elif shortlist_df.empty:
                 st.warning(f"📊 Scan found {len(momentum_df)} stocks with momentum, but none qualified as 'Top Picks' (Score < 45).")

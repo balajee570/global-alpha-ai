@@ -52,16 +52,23 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
 
         df = data.get(ticker)
         if df is None or df.empty:
-            failed.append((ticker, "No data"))
+            failed.append((ticker, "No data from yfinance"))
+            logger.debug(f"{ticker}: No data from yfinance")
             continue
+
+        orig_len = len(df)
         if len(df) < MIN_BARS:
             failed.append((ticker, f"Only {len(df)} bars (need {MIN_BARS})"))
+            logger.debug(f"{ticker}: Only {len(df)} bars")
             continue
 
         try:
             # Clean data
             df = df.dropna(subset=["Close", "Volume"])
+            cleaned_len = len(df)
             if len(df) < MIN_BARS:
+                failed.append((ticker, f"After dropna: {cleaned_len} bars (was {orig_len})"))
+                logger.debug(f"{ticker}: After dropna {cleaned_len} bars (was {orig_len})")
                 continue
 
             close = df["Close"]
