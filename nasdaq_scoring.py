@@ -245,7 +245,7 @@ def recommend_action_nasdaq(metrics: dict, tech: dict) -> dict:
     Returns {action, conviction, scores, bull_case, bear_case, entry_zone, stop_loss, targets}.
     """
     try:
-        price = _coalesce(tech.get("Price ₹"), _coalesce(metrics.get("price"), 100.0))
+        price = _coalesce(tech.get("Price $"), _coalesce(metrics.get("price"), 100.0))
         atrp = _coalesce(tech.get("ATR %"), 3.0)
         stage_id = int(_coalesce(tech.get("StageId"), 0))
 
@@ -346,8 +346,8 @@ def recommend_action_nasdaq(metrics: dict, tech: dict) -> dict:
 
         # Targets
         targets = {}
-        if tech.get("Target ₹"):
-            targets["technical"] = round(float(tech["Target ₹"]), 2)
+        if tech.get("Target $"):
+            targets["technical"] = round(float(tech["Target $"]), 2)
         if metrics.get("target_mean"):
             targets["analyst"] = round(float(metrics["target_mean"]), 2)
 
