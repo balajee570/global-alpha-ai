@@ -175,11 +175,21 @@ if symbols and st.button("🚀 Run Full Scan", type="primary", use_container_wid
             shortlist_df = st.session_state.scan_result.get("shortlist_df", pd.DataFrame())
 
             if momentum_df.empty:
-                st.warning(f"⚠️ No scan results. Checked {len(symbols)} stocks but none had valid technical data.")
-                st.info("This usually means:")
-                st.info("• Stocks don't have 1 year of price history available")
-                st.info("• yfinance data is incomplete or unavailable")
-                st.info("• Try different symbols, or wait a moment and try again")
+                st.error(f"❌ No scan results. Checked {len(symbols)} stocks but none returned valid data.")
+                with st.expander("🔧 Troubleshooting"):
+                    st.write("""
+**Possible causes:**
+1. **yfinance rate limit** - Try again in 30 seconds
+2. **Network issue** - Check your internet connection
+3. **Bad symbols** - Some stocks may not exist or be delisted
+4. **Sparse data** - Stocks may not have enough price history
+
+**Solutions:**
+- Click "Test Data Download" in Quick Diagnostics to check if data works
+- Use CSV upload with your own stock list instead of defaults
+- Try uploading a smaller CSV (10-20 stocks) to test
+- If test download works but scan fails, the issue is data availability
+                    """)
             elif shortlist_df.empty:
                 st.warning(f"📊 Scan found {len(momentum_df)} stocks with momentum, but none qualified as 'Top Picks' (Score < 45).")
                 st.info("Check the Full Scan tab to see all candidates.")

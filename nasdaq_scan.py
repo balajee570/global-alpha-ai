@@ -171,9 +171,14 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
             logger.debug(f"Processing error for {ticker}: {e}")
 
     if not results:
+        # Log why no results
+        logger.warning(f"Scan returned 0 results from {total} stocks")
+        if failed:
+            logger.warning(f"Failed stocks: {failed[:10]}")  # Log first 10 failures
         return pd.DataFrame()
 
     df = pd.DataFrame(results)
+    logger.info(f"Scan returned {len(df)} results from {total} stocks ({len(failed)} failed)")
 
     # Score and rank
     df = compute_composite_score_nasdaq(df)
