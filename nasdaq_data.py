@@ -92,11 +92,12 @@ def get_nasdaq_universe() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def parse_nasdaq_screener_csv(uploaded_file) -> pd.DataFrame:
+def parse_nasdaq_screener_csv(uploaded_file) -> list:
     """
     Parse a NASDAQ screener CSV upload.
     Expects columns: Symbol, Name, Sector, Industry, Price, Market Cap, etc.
     Validates symbols and drops invalid rows.
+    Returns list of valid NASDAQ symbols.
     """
     try:
         df = pd.read_csv(uploaded_file)
@@ -110,7 +111,7 @@ def parse_nasdaq_screener_csv(uploaded_file) -> pd.DataFrame:
             None
         )
         if symbol_col is None:
-            return pd.DataFrame()  # No valid symbol column
+            return []  # No valid symbol column
 
         # Rename to standard 'Symbol'
         df = df.rename(columns={symbol_col: 'SYMBOL'})
@@ -128,10 +129,10 @@ def parse_nasdaq_screener_csv(uploaded_file) -> pd.DataFrame:
         # Keep only unique symbols
         df = df.drop_duplicates('SYMBOL').reset_index(drop=True)
 
-        return df[['SYMBOL']].rename(columns={'SYMBOL': 'Symbol'})
+        return df['SYMBOL'].tolist()
     except Exception as e:
         logger.error(f"CSV parse failed: {e}")
-        return pd.DataFrame()
+        return []
 
 
 @st.cache_data(ttl=3600, show_spinner=False)

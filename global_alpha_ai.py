@@ -1,6 +1,6 @@
 """
 Global Alpha AI - NASDAQ Recommendation Engine
-Streamlit app for comprehensive stock analysis with premium precision metrics
+Complete Streamlit UI with AI intelligence layer
 """
 
 from __future__ import annotations
@@ -8,15 +8,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone, timedelta
-import json
-import os
-import tempfile
 
 # Import NASDAQ engine modules
 from nasdaq_scan import build_scan_report
 from nasdaq_data import parse_nasdaq_screener_csv, get_sp500_list
 from nasdaq_fundamentals import fetch_fundamentals_nasdaq
-from nasdaq_scoring import recommend_action_nasdaq
+from nasdaq_ai import (
+    get_live_market_snapshot, fetch_market_news, fetch_stock_news,
+    generate_market_intelligence, generate_strategy_brief, generate_stock_thesis,
+    get_snapshot_summary
+)
+from nasdaq_export import build_excel_workbook
 
 # ==================== CONFIG ====================
 ET = timezone(timedelta(hours=-4))
@@ -73,10 +75,8 @@ html, body {
 .regime-aggressive { color: var(--emerald); font-weight: 700; }
 .regime-selective { color: var(--amber); font-weight: 700; }
 .regime-defensive { color: var(--red); font-weight: 700; }
-.grade-a-plus { color: var(--emerald); font-weight: 700; }
-.grade-a { color: var(--emerald); font-weight: 600; }
-.grade-b { color: var(--amber); }
-.grade-c { color: var(--red); }
+.intel-brief { background: rgba(4,14,10,0.8); border-left: 4px solid var(--emerald); padding: 20px; border-radius: 12px; margin: 20px 0; }
+.strategy-brief { background: rgba(20,30,50,0.8); border-left: 4px solid var(--blue); padding: 20px; border-radius: 12px; margin: 20px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,19 +87,29 @@ st.markdown(f"""
         NASDAQ ALPHA ENGINE
     </span>
     <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#8896b3; margin-top:8px;">
-        Premium Precision Metrics • {datetime.now(ET).strftime("%d %b %Y %H:%M ET")}
-    </div>
-    <div style="font-family:'DM Sans',sans-serif; font-size:0.85rem; color:#a0b4d8; margin-top:6px;">
-        6 Precision Metrics: Piotroski • FCF Yield • EV/FCF • Margin Trends • R&D % • Insider Signals
+        AI-Powered Precision Metrics • {datetime.now(ET).strftime("%d %b %Y %H:%M ET")}
     </div>
 </div>
 """, unsafe_allow_html=True)
 
+# ==================== LIVE MARKET SNAPSHOT ====================
+snapshot = get_live_market_snapshot()
+cols = st.columns(4)
+for idx, (name, color) in enumerate([("S&P 500", "#1f77b4"), ("Nasdaq", "#ff7f0e"), ("VIX", "#d62728"), ("DXY", "#2ca02c")]):
+    with cols[idx]:
+        if name in snapshot:
+            data = snapshot[name]
+            price = data.get("price", "N/A")
+            chg = data.get("change", 0)
+            st.metric(
+                name,
+                f"{price:.2f}" if isinstance(price, (int, float)) else price,
+                f"{chg:+.2f}%"
+            )
+
 # ==================== SESSION STATE ====================
 if "scan_result" not in st.session_state:
     st.session_state.scan_result = None
-if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = None
 
 # ==================== INPUT SECTION ====================
 st.divider()
@@ -112,26 +122,28 @@ with col1:
 with col2:
     st.markdown("#### 🎯")
 
+symbols = None
+
 if input_mode == "Upload CSV":
     uploaded_file = st.file_uploader("Upload NASDAQ Screener CSV (Symbol, Sector, etc.)", type=["csv"])
     if uploaded_file:
         try:
             symbols = parse_nasdaq_screener_csv(uploaded_file)
-            st.success(f"✅ Loaded **{len(symbols)}** stocks from CSV")
+            if symbols:
+                st.success(f"✅ Loaded **{len(symbols)}** stocks from CSV")
+            else:
+                st.error("CSV parsing failed or no valid symbols found.")
+                symbols = None
         except Exception as e:
             st.error(f"CSV parsing error: {e}")
             symbols = None
-    else:
-        symbols = None
 else:
     symbols = get_sp500_list()
-    st.info(f"📊 Using S&P 500 default universe ({len(symbols)} stocks for speed)")
+    st.info(f"📊 Using S&P 500 default universe ({len(symbols)} stocks)")
 
 # ==================== MANUAL SEARCH ====================
 with st.expander("🔍 Add Stocks Manually (Search Tab)"):
     search_ticker = st.text_input("Search ticker (e.g., MSFT, NVDA)", key="search_ticker").upper().strip()
-    if search_ticker and len(search_ticker) <= 5:
-        st.session_state.selected_ticker = search_ticker
 
 # ==================== RUN SCAN ====================
 if symbols and st.button("🚀 Run Full Scan", type="primary", use_container_width=True):
@@ -174,24 +186,33 @@ if st.session_state.scan_result:
     with col1:
         st.metric("Total Scan", len(momentum_df))
     with col2:
-        stage_1_2 = len(momentum_df[momentum_df["StageId"].isin([1, 2])])
+        stage_1_2 = len(momentum_df[momentum_df["StageId"].isin([1, 2])]) if "StageId" in momentum_df.columns else 0
         st.metric("Stage 1-2", stage_1_2)
     with col3:
-        breakouts = len(momentum_df[momentum_df["StageId"] == 3])
+        breakouts = len(momentum_df[momentum_df["StageId"] == 3]) if "StageId" in momentum_df.columns else 0
         st.metric("Breakouts", breakouts)
     with col4:
         avg_score = momentum_df["Score"].mean() if "Score" in momentum_df.columns else 0
         st.metric("Avg Score", f"{avg_score:.0f}")
     with col5:
-        shortlist_count = len(shortlist_df)
-        st.metric("Top Picks (A/A+)", shortlist_count)
+        st.metric("Top Picks", len(shortlist_df))
+
+    # AI Market Intelligence
+    with st.spinner("🧠 Generating AI market intelligence..."):
+        try:
+            news = fetch_market_news()
+            intelligence = generate_market_intelligence(regime, shortlist_df, news)
+            st.markdown(f'<div class="intel-brief">{intelligence}</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.warning(f"AI brief unavailable: {str(e)}")
 
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Full Scan",
         "🔥 Top Picks",
         "🔍 Search Stock",
         "📈 Sector Strength",
+        "🧠 AI Strategy",
         "💾 Download"
     ])
 
@@ -199,7 +220,6 @@ if st.session_state.scan_result:
     with tab1:
         st.subheader("All Scanned Stocks (Ranked by Score)")
 
-        # Filter options
         col1, col2, col3 = st.columns(3)
         with col1:
             min_score = st.slider("Min Score", 0, 100, 0)
@@ -208,19 +228,18 @@ if st.session_state.scan_result:
         with col3:
             grade_filter = st.multiselect("Grade Filter", ["A+", "A", "B+", "B", "C"], default=["A+", "A", "B+"])
 
-        # Apply filters
         display_df = momentum_df.copy()
-        if min_score > 0:
+        if min_score > 0 and "Score" in display_df.columns:
             display_df = display_df[display_df["Score"] >= min_score]
-        if stage_filter:
+        if stage_filter and "StageId" in display_df.columns:
             display_df = display_df[display_df["StageId"].isin(stage_filter)]
         if "Grade" in display_df.columns:
             display_df = display_df[display_df["Grade"].isin(grade_filter)]
 
-        display_df = display_df.sort_values("Score", ascending=False)
+        if "Score" in display_df.columns:
+            display_df = display_df.sort_values("Score", ascending=False)
 
-        # Show table
-        cols_to_show = ["Ticker", "Price ₹", "Score", "Grade", "Stage", "RSI", "ADX", "Vol Ratio", "Target ₹", "Upside %"]
+        cols_to_show = ["Ticker", "Price $", "Score", "Grade", "Stage", "RSI", "ADX", "Vol Ratio", "Target $", "Upside %"]
         cols_to_show = [c for c in cols_to_show if c in display_df.columns]
         st.dataframe(display_df[cols_to_show], use_container_width=True, height=400)
 
@@ -241,7 +260,6 @@ if st.session_state.scan_result:
                 action = rec.get("action", "HOLD")
                 conviction = rec.get("conviction", 0)
 
-                # Color code by action
                 action_class = {
                     "STRONG_BUY": "action-strong-buy",
                     "BUY": "action-buy",
@@ -257,7 +275,7 @@ if st.session_state.scan_result:
                     </div>
                     <div class="metric-row">
                         <span>Price:</span>
-                        <strong>${row.get("Price ₹", "N/A")}</strong>
+                        <strong>${row.get("Price $", "N/A")}</strong>
                     </div>
                     <div class="metric-row">
                         <span>Score:</span>
@@ -271,13 +289,8 @@ if st.session_state.scan_result:
                         <span>Stage:</span>
                         <strong>{row.get("Stage", "N/A")}</strong>
                     </div>
-                    <div class="metric-row">
-                        <span>Target:</span>
-                        <strong>${rec.get("targets", {}).get("target1", "N/A")}</strong>
-                    </div>
                 """, unsafe_allow_html=True)
 
-                # Bull case
                 bull_case = rec.get("bull_case", [])
                 if bull_case:
                     st.markdown("**Bull Case:**")
@@ -295,18 +308,17 @@ if st.session_state.scan_result:
         if search_input and len(search_input) <= 5:
             with st.spinner(f"Fetching data for {search_input}..."):
                 try:
-                    # Fetch fundamentals
                     fund = fetch_fundamentals_nasdaq(search_input)
 
                     if fund.get("error"):
                         st.error(f"Error: {fund['error']}")
                     else:
-                        # Display basic info
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.metric("Price", f"${fund.get('price', 'N/A')}")
                         with col2:
-                            st.metric("Market Cap", f"${fund.get('market_cap', 0) / 1e9:.1f}B")
+                            mc = fund.get('market_cap', 0)
+                            st.metric("Market Cap", f"${mc / 1e9:.1f}B" if mc else "N/A")
                         with col3:
                             st.metric("P/E Ratio", f"{fund.get('pe_trailing', 'N/A')}")
                         with col4:
@@ -314,76 +326,52 @@ if st.session_state.scan_result:
 
                         st.divider()
 
-                        # Premium Metrics (6 precision metrics)
+                        # Premium Metrics
                         st.markdown("#### ⭐ Premium Precision Metrics")
                         col1, col2, col3 = st.columns(3)
 
                         with col1:
                             piotroski = fund.get("piotroski_score", 0)
                             color = "🟢" if piotroski >= 7 else "🟡" if piotroski >= 5 else "🔴"
-                            st.metric(
-                                f"{color} Piotroski Score",
-                                f"{piotroski}/9",
-                                help="Quality signal: 7-9 = high quality, 0-2 = distressed"
-                            )
+                            st.metric(f"{color} Piotroski", f"{piotroski}/9")
 
                         with col2:
                             fcf_yield = fund.get("fcf_yield", 0)
-                            st.metric(
-                                "FCF Yield",
-                                f"{fcf_yield:.2f}%",
-                                help="FCF / Market Cap: >3% = attractive"
-                            )
+                            st.metric("FCF Yield", f"{fcf_yield:.2f}%")
 
                         with col3:
                             ev_fcf = fund.get("ev_fcf", 0)
-                            st.metric(
-                                "EV/FCF Ratio",
-                                f"{ev_fcf:.1f}x",
-                                help="<20x = attractive, >30x = expensive"
-                            )
+                            st.metric("EV/FCF", f"{ev_fcf:.1f}x")
 
                         col1, col2, col3 = st.columns(3)
 
                         with col1:
                             margin_trend = fund.get("net_margin_trend", 0)
-                            st.metric(
-                                "Margin Trend (3Y)",
-                                f"{margin_trend:+.1f}%",
-                                help="Net margin change: improving >0"
-                            )
+                            st.metric("Margin Trend (3Y)", f"{margin_trend:+.1f}%")
 
                         with col2:
                             rd_pct = fund.get("rd_percent", 0)
-                            st.metric(
-                                "R&D % Revenue",
-                                f"{rd_pct:.1f}%",
-                                help="Innovation capacity"
-                            )
+                            st.metric("R&D % Revenue", f"{rd_pct:.1f}%")
 
                         with col3:
                             insider_signal = fund.get("insider_signal", 0.5)
                             signal_text = "Buying" if insider_signal > 0.6 else "Selling" if insider_signal < 0.4 else "Neutral"
-                            st.metric(
-                                "Insider Signal",
-                                signal_text,
-                                help=f"Score: {insider_signal:.2f}"
-                            )
+                            st.metric("Insider Signal", signal_text)
 
                         st.divider()
 
-                        # Traditional fundamentals
+                        # Fundamentals
                         st.markdown("#### 📊 Valuation & Quality")
                         col1, col2, col3, col4 = st.columns(4)
 
                         with col1:
-                            st.metric("P/B Ratio", f"{fund.get('pb', 'N/A')}")
+                            st.metric("P/B", f"{fund.get('pb', 'N/A')}")
                         with col2:
-                            st.metric("PEG Ratio", f"{fund.get('peg', 'N/A')}")
+                            st.metric("PEG", f"{fund.get('peg', 'N/A')}")
                         with col3:
                             st.metric("ROE", f"{fund.get('roe', 0) * 100:.1f}%")
                         with col4:
-                            st.metric("D/E Ratio", f"{fund.get('debt_to_equity', 0):.2f}")
+                            st.metric("D/E", f"{fund.get('debt_to_equity', 0):.2f}")
 
                         col1, col2, col3, col4 = st.columns(4)
 
@@ -398,18 +386,18 @@ if st.session_state.scan_result:
 
                         st.divider()
 
-                        # Analyst & Ownership
-                        st.markdown("#### 🎯 Analyst & Ownership")
-                        col1, col2, col3 = st.columns(3)
+                        # AI Thesis
+                        st.markdown("#### 🧠 AI Analysis")
+                        with st.spinner("Generating AI thesis..."):
+                            try:
+                                news = fetch_stock_news(search_input)
+                                technicals = {}  # Would need to fetch from scan
+                                thesis = generate_stock_thesis(search_input, fund, technicals, news)
+                                st.markdown(f'<div class="intel-brief">{thesis}</div>', unsafe_allow_html=True)
+                            except Exception as e:
+                                st.warning(f"AI thesis unavailable: {str(e)}")
 
-                        with col1:
-                            st.metric("Target Price", f"${fund.get('target_mean', 'N/A')}")
-                        with col2:
-                            st.metric("Analyst Count", f"{fund.get('analyst_count', 0)}")
-                        with col3:
-                            st.metric("Institutional Held", f"{fund.get('institutional_held', 0) * 100:.1f}%")
-
-                        # News headlines
+                        # News
                         if fund.get("news_headlines"):
                             st.markdown("#### 📰 Recent News")
                             for headline in fund.get("news_headlines", [])[:3]:
@@ -423,9 +411,8 @@ if st.session_state.scan_result:
         st.subheader("🌐 Sector Leadership")
 
         if sector_strength.empty:
-            st.info("Sector analysis not yet available.")
+            st.info("Sector analysis not available.")
         else:
-            # Top sectors
             top_sectors = sector_strength.head(5)
             st.markdown("**Top 5 Sectors (by momentum)**")
             for idx, (_, row) in enumerate(top_sectors.iterrows(), 1):
@@ -433,16 +420,25 @@ if st.session_state.scan_result:
                 score = row.get("Score", 0)
                 st.progress(min(score / 100, 1.0), text=f"{sector}: {score:.0f}")
 
-            # Show full table
             with st.expander("Show all sectors"):
                 cols_to_show = [c for c in ["Sector", "Score", "1M Return %", "3M Return %", "6M Return %"] if c in sector_strength.columns]
                 st.dataframe(sector_strength[cols_to_show], use_container_width=True)
 
-    # ========== TAB 5: Download ==========
+    # ========== TAB 5: AI Strategy ==========
     with tab5:
+        st.subheader("🧠 AI Strategy Brief")
+
+        with st.spinner("Generating strategy..."):
+            try:
+                strategy = generate_strategy_brief(shortlist_df, fund_map, regime)
+                st.markdown(f'<div class="strategy-brief">{strategy}</div>', unsafe_allow_html=True)
+            except Exception as e:
+                st.warning(f"Strategy generation failed: {str(e)}")
+
+    # ========== TAB 6: Download ==========
+    with tab6:
         st.subheader("💾 Export Results")
 
-        # Full scan CSV
         if not momentum_df.empty:
             csv_data = momentum_df.to_csv(index=False)
             st.download_button(
@@ -452,7 +448,6 @@ if st.session_state.scan_result:
                 mime="text/csv"
             )
 
-        # Shortlist CSV
         if not shortlist_df.empty:
             shortlist_with_recs = shortlist_df.copy()
             shortlist_with_recs["Action"] = [
@@ -472,12 +467,25 @@ if st.session_state.scan_result:
                 mime="text/csv"
             )
 
+        # Excel export
+        with st.spinner("Building Excel workbook..."):
+            try:
+                excel_buffer = build_excel_workbook(result, fund_map)
+                st.download_button(
+                    label="📊 Download Full Report (Excel 6+ sheets)",
+                    data=excel_buffer,
+                    file_name=f"nasdaq_report_{datetime.now(ET).strftime('%Y%m%d_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.error(f"Excel export failed: {str(e)}")
+
         st.divider()
         st.caption("📊 Data last updated: " + datetime.now(ET).strftime("%d %b %Y %H:%M ET"))
 
 # ==================== FOOTER ====================
 st.divider()
 st.caption("""
-**NASDAQ Alpha Engine** • Powered by Piotroski + FCF Yield + EV/FCF •
-6 Premium Precision Metrics for World-Class Stock Analysis
+**NASDAQ Alpha Engine** • AI-Powered Precision Metrics •
+Piotroski + FCF Yield + EV/FCF + Margin Trends + R&D % + Insider Signals
 """)

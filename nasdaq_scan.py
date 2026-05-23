@@ -138,7 +138,7 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
 
             results.append({
                 "Ticker": ticker,
-                "Price ₹": round(price, 2),
+                "Price $": round(price, 2),
                 "MA50": round(ma50, 2) if np.isfinite(ma50) else np.nan,
                 "MA200": round(ma200, 2) if np.isfinite(ma200) else np.nan,
                 "RSI": rsi,
@@ -155,9 +155,9 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
                 "Dist MA50 %": d_ma50,
                 "Dist MA200 %": d_ma200,
                 "ATR %": atr_pct,
-                "Target ₹": upside["target"],
+                "Target $": upside["target"],
                 "Upside %": upside["upside_pct"],
-                "52W High ₹": upside["high52"],
+                "52W High $": upside["high52"],
                 "Gap to 52W %": upside["high52_gap_pct"],
                 "Pattern": pat.get("name"),
                 "Pattern Q": pat.get("quality"),
