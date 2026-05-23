@@ -176,13 +176,14 @@ def parallel_fetch_nasdaq(symbols: list, batch_size: int = 50, progress_cb=None)
 
     def fetch_one(symbol):
         try:
+            # Try 1 year first, fallback to 2 years if sparse
             data = _yf_download(
-                symbol, period='1y', interval='1d',
+                symbol, period='2y', interval='1d',
                 group_by='ticker', threads=False, progress=False,
                 auto_adjust=True, timeout=30,
             )
             if data is not None and not data.empty:
-                return symbol, data
+                return symbol, data.tail(252)  # Return last 252 days (1 year)
         except Exception as e:
             logger.debug(f"Fetch failed for {symbol}: {e}")
         return symbol, None
