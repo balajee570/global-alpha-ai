@@ -226,8 +226,8 @@ def attach_grade_nasdaq(df: pd.DataFrame, regime_label: str = "SELECTIVE",
     return d
 
 
-def build_shortlist_nasdaq(df: pd.DataFrame, target: int = 25, min_score: float = 55.0, floor: int = 10) -> pd.DataFrame:
-    """Top N rows above score threshold, with floor."""
+def build_shortlist_nasdaq(df: pd.DataFrame, target: int = 25, min_score: float = 45.0, floor: int = 5) -> pd.DataFrame:
+    """Top N rows above score threshold, with floor. Lowered threshold for inclusivity."""
     if df.empty or "Score" not in df.columns:
         return df.head(0)
 
