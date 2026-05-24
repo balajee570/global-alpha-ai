@@ -522,20 +522,33 @@ def parse_nasdaq_screener_csv(uploaded_file) -> pd.DataFrame:
     if not sym_c:
         raise ValueError("CSV must have a 'Symbol' (or 'Ticker') column")
 
-    df = pd.DataFrame()
-    df["Symbol"]     = raw[sym_c].astype(str).str.strip().str.upper()
-    df["Name"]       = raw[col("Name")].astype(str).str.strip()           if col("Name")       else ""
-    df["Last Sale"]  = raw[col("Last Sale")].map(_clean_money)             if col("Last Sale")  else np.nan
-    df["Net Change"] = raw[col("Net Change")].map(_clean_money)            if col("Net Change") else np.nan
-    df["% Change"]   = raw[col("% Change")].map(_clean_money)              if col("% Change")   else np.nan
-    df["Market Cap"] = raw[col("Market Cap")].map(_clean_int)              if col("Market Cap") else np.nan
-    df["Country"]    = raw[col("Country")].astype(str).str.strip()         if col("Country")    else ""
-    df["IPO Year"]   = raw[col("IPO Year")].map(_clean_int)                if col("IPO Year")   else np.nan
-    df["Volume"]     = raw[col("Volume")].map(_clean_int)                  if col("Volume")     else np.nan
-    df["Sector"]     = raw[col("Sector")].astype(str).str.strip()          if col("Sector")     else ""
-    df["Industry"]   = raw[col("Industry")].astype(str).str.strip()        if col("Industry")   else ""
+    def _str_col(c):
+        return raw[c].fillna("").astype(str).str.strip() if c else None
 
-    df = df[df["Symbol"].apply(lambda s: bool(_SYMBOL_RE.match(s)))]
+    df = pd.DataFrame()
+    sym_series = _str_col(sym_c).str.upper()
+    df["Symbol"]     = sym_series
+    name_s = _str_col(col("Name"))
+    df["Name"]       = name_s if name_s is not None else ""
+    df["Last Sale"]  = raw[col("Last Sale")].map(_clean_money)  if col("Last Sale")  else np.nan
+    df["Net Change"] = raw[col("Net Change")].map(_clean_money) if col("Net Change") else np.nan
+    df["% Change"]   = raw[col("% Change")].map(_clean_money)   if col("% Change")   else np.nan
+    df["Market Cap"] = raw[col("Market Cap")].map(_clean_int)   if col("Market Cap") else np.nan
+    country_s = _str_col(col("Country"))
+    df["Country"]    = country_s if country_s is not None else ""
+    df["IPO Year"]   = raw[col("IPO Year")].map(_clean_int)    if col("IPO Year")   else np.nan
+    df["Volume"]     = raw[col("Volume")].map(_clean_int)      if col("Volume")     else np.nan
+    sector_s = _str_col(col("Sector"))
+    df["Sector"]     = sector_s if sector_s is not None else ""
+    industry_s = _str_col(col("Industry"))
+    df["Industry"]   = industry_s if industry_s is not None else ""
+
+    def _is_valid_sym(s):
+        if not isinstance(s, str) or not s:
+            return False
+        return bool(_SYMBOL_RE.match(s))
+
+    df = df[df["Symbol"].apply(_is_valid_sym)]
     df = df.drop_duplicates("Symbol").reset_index(drop=True)
     df.loc[df["Sector"].isin(["", "nan", "None"]), "Sector"]     = "Unknown"
     df.loc[df["Industry"].isin(["", "nan", "None"]), "Industry"] = "Unknown"
