@@ -138,7 +138,7 @@ def scan_nasdaq_equities(symbols: list, progress_cb=None) -> pd.DataFrame:
             # Filter: keep all stocks with valid technical data
             # Removed strict stage/momentum filters - just need valid price/volume data
             # Scoring will separate good opportunities from weak ones
-            if not (np.isfinite(ma50) and np.isfinite(ma200) and np.isfinite(rsi)):
+            if not (np.isfinite(ma50) and np.isfinite(rsi)):
                 continue  # Skip only if core technicals are invalid
 
             # Pattern detection
