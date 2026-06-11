@@ -1,0 +1,15 @@
+# SQLite scan history + portfolio DB
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
