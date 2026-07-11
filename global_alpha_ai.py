@@ -44,17 +44,23 @@ def now_et() -> datetime:
 def fmt_ist(fmt: str = "%d %b %Y · %H:%M IST") -> str:
     return now_ist().strftime(fmt)
 
+# curl_cffi (used for Yahoo's Chrome-TLS "crumb" bypass, and bundled inside
+# modern yfinance) wraps libcurl, whose handles are NOT thread-safe. The
+# segfaults came from concurrent use of one handle across threads — including
+# yfinance's OWN internal worker threads when threads=True. Two rules keep it
+# stable: (1) every thread gets its own session (no shared handle), and
+# (2) NEVER let yfinance run a threaded download (it would fan one handle
+# across its internal threads). Set GLOBAL_ALPHA_NO_CURL=1 to opt out entirely.
+_NO_CURL = os.environ.get("GLOBAL_ALPHA_NO_CURL", "").strip().lower() in ("1", "true", "yes")
 try:
+    if _NO_CURL:
+        raise ImportError("curl_cffi disabled via GLOBAL_ALPHA_NO_CURL")
     from curl_cffi import requests as _cf_requests
     _HAS_CURL_CFFI = True
 except Exception:
     _cf_requests = None
     _HAS_CURL_CFFI = False
 
-# curl_cffi wraps libcurl, whose easy handles are NOT thread-safe: a single
-# Session touched concurrently by the main thread, the background pipeline
-# thread, and the 8-worker fundamentals pool corrupts memory and segfaults.
-# Give every thread its own session so no handle is ever shared.
 _YF_TLS = threading.local()
 
 def _yf_session():
@@ -69,6 +75,14 @@ def _yf_session():
         _YF_TLS.session = sess
     return sess
 
+# Warm up libcurl's process-wide global init once, here on the main thread,
+# before any worker thread lazily creates its own session — concurrent first
+# inits race inside libcurl and are a known segfault trigger.
+try:
+    _yf_session()
+except Exception:
+    pass
+
 def _yf_ticker(symbol: str):
     sess = _yf_session()
     if sess is not None:
@@ -79,16 +93,18 @@ def _yf_ticker(symbol: str):
     return yf.Ticker(symbol)
 
 def _yf_download(*args, **kwargs):
-    # Only attach the curl_cffi session when the download is single-threaded.
-    # With threads=True, yfinance fans the download across its own internal
-    # threads that would all reuse this one non-thread-safe libcurl handle and
-    # segfault. Bulk threaded downloads hit the chart endpoint, which does not
-    # need the crumb bypass, so yfinance's thread-safe default session is fine.
+    # Hard-disable yfinance's internal threading: threads=True fans a single
+    # curl_cffi/libcurl handle across worker threads and segfaults (seen on
+    # Python 3.14 + curl_cffi 0.15 + yfinance 1.5). Everything downloads
+    # single-threaded per thread, each thread on its own session.
+    kwargs["threads"] = False
     sess = _yf_session()
-    if sess is not None and "session" not in kwargs and kwargs.get("threads") is False:
+    if sess is not None and "session" not in kwargs:
         try:
             return yf.download(*args, session=sess, **kwargs)
         except TypeError:
+            # This yfinance version rejects session=; fall through to its
+            # own (internally impersonating) session instead.
             pass
     return yf.download(*args, **kwargs)
 
@@ -267,7 +283,11 @@ MIN_DOLLAR_VOLUME  = 5_000_000.0  # USD — 20d avg daily dollar volume floor
 SHORTLIST_TARGET     = 25
 SHORTLIST_MIN_SCORE  = 55.0
 SHORTLIST_FLOOR      = 10
-FUND_WORKERS         = 8
+# Serialized: parallel workers hit the non-thread-safe curl_cffi/libcurl
+# handle concurrently and segfault. Fundamentals are cached, and the
+# shortlist is small (<=25), so sequential fetch is a fine tradeoff for not
+# crashing.
+FUND_WORKERS         = 1
 FUND_CACHE_TTL_SEC   = 21600
 
 STAGE_LABELS = {0: "—", 1: "Accumulation", 2: "Early Markup", 3: "Breakout", 4: "Extended"}
