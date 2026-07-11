@@ -230,6 +230,14 @@ def _run_pipeline_bg(job_id: str, cb, symbols: list, screener_df: pd.DataFrame) 
 _run_pipeline = None  # forward declaration
 
 # =============================
+# PAGE CONFIG — must be the FIRST Streamlit command executed. Even st.secrets
+# access before this trips "set_page_config() must be the first command" on
+# newer Streamlit versions and aborts app startup.
+# =============================
+
+st.set_page_config(page_title="Global Alpha AI", layout="wide", initial_sidebar_state="collapsed")
+
+# =============================
 # API CONFIG
 # =============================
 
@@ -316,12 +324,6 @@ def _sector_display_name(raw):
     if not raw or (isinstance(raw, float) and not np.isfinite(raw)):
         return None
     return str(raw).strip() or None
-
-# =============================
-# PAGE CONFIG
-# =============================
-
-st.set_page_config(page_title="Global Alpha AI", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
