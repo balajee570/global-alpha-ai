@@ -46,22 +46,48 @@ def fmt_ist(fmt: str = "%d %b %Y · %H:%M IST") -> str:
 
 try:
     from curl_cffi import requests as _cf_requests
-    YF_SESSION = _cf_requests.Session(impersonate="chrome")
+    _HAS_CURL_CFFI = True
 except Exception:
-    YF_SESSION = None
+    _cf_requests = None
+    _HAS_CURL_CFFI = False
+
+# curl_cffi wraps libcurl, whose easy handles are NOT thread-safe: a single
+# Session touched concurrently by the main thread, the background pipeline
+# thread, and the 8-worker fundamentals pool corrupts memory and segfaults.
+# Give every thread its own session so no handle is ever shared.
+_YF_TLS = threading.local()
+
+def _yf_session():
+    if not _HAS_CURL_CFFI:
+        return None
+    sess = getattr(_YF_TLS, "session", None)
+    if sess is None:
+        try:
+            sess = _cf_requests.Session(impersonate="chrome")
+        except Exception:
+            sess = None
+        _YF_TLS.session = sess
+    return sess
 
 def _yf_ticker(symbol: str):
-    if YF_SESSION is not None:
+    sess = _yf_session()
+    if sess is not None:
         try:
-            return yf.Ticker(symbol, session=YF_SESSION)
+            return yf.Ticker(symbol, session=sess)
         except Exception:
             pass
     return yf.Ticker(symbol)
 
 def _yf_download(*args, **kwargs):
-    if YF_SESSION is not None and "session" not in kwargs:
+    # Only attach the curl_cffi session when the download is single-threaded.
+    # With threads=True, yfinance fans the download across its own internal
+    # threads that would all reuse this one non-thread-safe libcurl handle and
+    # segfault. Bulk threaded downloads hit the chart endpoint, which does not
+    # need the crumb bypass, so yfinance's thread-safe default session is fine.
+    sess = _yf_session()
+    if sess is not None and "session" not in kwargs and kwargs.get("threads") is False:
         try:
-            return yf.download(*args, session=YF_SESSION, **kwargs)
+            return yf.download(*args, session=sess, **kwargs)
         except TypeError:
             pass
     return yf.download(*args, **kwargs)
@@ -2881,7 +2907,7 @@ if uploaded is not None:
         st.session_state["screener_df"] = screener_df
         st.success(f"Parsed {len(screener_df)} symbols from screener CSV.")
         with st.expander(f"Preview · {len(screener_df)} symbols", expanded=False):
-            st.dataframe(screener_df, use_container_width=True, hide_index=True, height=240)
+            st.dataframe(screener_df, width='stretch', hide_index=True, height=240)
     except Exception as e:
         st.error(f"Could not parse CSV: {e}")
 
@@ -3130,7 +3156,7 @@ def render_deep_dive_panel(ticker: str, tech_row: dict, metrics: dict, rec: dict
             ).sort_values("Target $")
             st.dataframe(
                 tdf.style.format({"Target $": "${:.2f}", "Upside %": "{:+.1f}%"}, na_rep="—"),
-                use_container_width=True, hide_index=True,
+                width='stretch', hide_index=True,
             )
 
         st.markdown("**Position sizing** — risk-based share count from the stop distance")
@@ -3267,7 +3293,7 @@ def render_portfolio_section(regime_label: str | None = None) -> None:
         if "Action" in ev.columns: styler = styler.map(color_pos_action, subset=["Action"])
         if "Status" in ev.columns: styler = styler.map(color_pos_status, subset=["Status"])
         if "P&L %"  in ev.columns: styler = styler.map(color_pos_pnl,    subset=["P&L %"])
-        st.dataframe(styler, use_container_width=True, hide_index=True)
+        st.dataframe(styler, width='stretch', hide_index=True)
         st.caption("BELOW STOP = price under the current structure stop. "
                    "'If Holding' is the call for the position; 'Action' is the call for new money.")
 
@@ -3404,7 +3430,7 @@ if "strategy" in st.session_state:
             if "Pattern"  in display_cols: styler = styler.map(color_pattern,    subset=["Pattern"])
             if "RS Rank"  in display_cols: styler = styler.map(color_rs_rank,    subset=["RS Rank"])
 
-            st.dataframe(styler, use_container_width=True, height=520)
+            st.dataframe(styler, width='stretch', height=520)
             st.caption(f"All {len(momentum_df)} signals · ranked by composite Score. "
                        f"Grade blends Score, RS Rank, sector position, pattern quality, regime, and stage. "
                        f"Stage 4 rows are kept but down-weighted. Sector/Industry/Country merged from your screener CSV.")
@@ -3539,7 +3565,7 @@ if "strategy" in st.session_state:
                     ss_styler = ss_styler.map(color_ret, subset=[c])
             if "Status" in ss_cols:
                 ss_styler = ss_styler.map(color_status, subset=["Status"])
-            st.dataframe(ss_styler, use_container_width=True, height=400, hide_index=True)
+            st.dataframe(ss_styler, width='stretch', height=400, hide_index=True)
         else:
             st.info("Sector ETF data unavailable — check yfinance access.")
 
@@ -3556,7 +3582,7 @@ if "strategy" in st.session_state:
                 sector_df_st.style
                     .map(color_avg_up, subset=["Avg Upside %"])
                     .format({"Avg Upside %": "+{:.1f}%"}),
-                use_container_width=True, height=360, hide_index=True,
+                width='stretch', height=360, hide_index=True,
             )
 
     with tab_track:
@@ -3578,11 +3604,11 @@ if "strategy" in st.session_state:
                     changed = tracker[~tracker["Δ vs Prev Scan"].isin(["UNCHANGED", "STALE"])]
                     if not changed.empty:
                         st.markdown("**Changes vs previous scan** (new signals, drops, action flips)")
-                        st.dataframe(changed.head(40), use_container_width=True, hide_index=True)
+                        st.dataframe(changed.head(40), width='stretch', hide_index=True)
                 st.markdown("**All tracked signals** (window: 180 days)")
                 st.dataframe(
                     tracker.style.format({"Score": "{:.1f}"}, na_rep="—"),
-                    use_container_width=True, height=380, hide_index=True,
+                    width='stretch', height=380, hide_index=True,
                 )
         st.caption(f"History DB: {HIST_DB} — on Streamlit Cloud this survives reruns but not "
                    f"app reboots. Set GLOBAL_ALPHA_DATA to persistent storage for durable history.")
@@ -3607,7 +3633,7 @@ if "strategy" in st.session_state:
                         "Stop $": "${:.2f}", "T1 $": "${:.2f}", "T2 $": "${:.2f}",
                         "To Stop %": "{:+.1f}%", "To T2 %": "{:+.1f}%",
                     }, na_rep="—"),
-                    use_container_width=True, hide_index=True,
+                    width='stretch', hide_index=True,
                 )
 
         st.markdown('<div class="section-header" style="margin-top:30px">Forward-Return Validation</div>',
@@ -3625,11 +3651,11 @@ if "strategy" in st.session_state:
                 st.caption(f"{vrep['n_signals']:,} signals across {vrep['n_scans']} scans "
                            f"(only scans ≥3 days old are scored).")
                 st.markdown("**By recommendation action**")
-                st.dataframe(vrep["by_action"], use_container_width=True, hide_index=True)
+                st.dataframe(vrep["by_action"], width='stretch', hide_index=True)
                 st.markdown("**By rally stage**")
-                st.dataframe(vrep["by_stage"], use_container_width=True, hide_index=True)
+                st.dataframe(vrep["by_stage"], width='stretch', hide_index=True)
                 st.markdown("**By conviction grade**")
-                st.dataframe(vrep["by_grade"], use_container_width=True, hide_index=True)
+                st.dataframe(vrep["by_grade"], width='stretch', hide_index=True)
 
     with tab_intel:
         col_l, col_r = st.columns([3, 2])
@@ -3662,7 +3688,7 @@ if "strategy" in st.session_state:
                     label="⬇ Download full scan CSV",
                     data=momentum_df.to_csv(index=False).encode("utf-8"),
                     file_name=f"global_alpha_scan_{stamp}.csv",
-                    mime="text/csv", use_container_width=True,
+                    mime="text/csv", width='stretch',
                 )
             else:
                 st.info("Nothing to download yet.")
@@ -3677,7 +3703,7 @@ if "strategy" in st.session_state:
                         data=xlsx_bytes,
                         file_name=f"global_alpha_deepdive_{stamp}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
+                        width='stretch',
                     )
                 except Exception as e:
                     st.error(f"Excel build failed: {e}")
@@ -3692,7 +3718,7 @@ if "strategy" in st.session_state:
                     "Price $":"${:.2f}","Target $":"${:.2f}","RSI":"{:.1f}",
                     "ADX":"{:.1f}","RS vs NDX":"{:.2f}","Score":"{:.1f}","Upside %":"+{:.1f}%",
                 }),
-                use_container_width=True, height=420,
+                width='stretch', height=420,
             )
 
     if st.session_state.get("ai_debug"):
